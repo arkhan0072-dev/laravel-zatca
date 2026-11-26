@@ -24,6 +24,7 @@ return new class extends Migration
             $table->string('previous_hash', 100); // PIH
             $table->string('hash', 100);
             $table->longText('xml');
+            $table->text('qr')->nullable(); // base64 TLV, printed on the invoice
             $table->timestamps();
             $table->unique(['unit', 'counter']);
         });

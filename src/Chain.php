@@ -47,6 +47,7 @@ class Chain
                     'previous_hash' => $link->previousHash,
                     'hash' => $signed->hash,
                     'xml' => $signed->xml,
+                    'qr' => $signed->qr === '' ? null : $signed->qr,
                 ]);
             } catch (UniqueConstraintViolationException $e) {
                 throw new ChainException("Invoice UUID {$signed->uuid} was already used.", previous: $e);

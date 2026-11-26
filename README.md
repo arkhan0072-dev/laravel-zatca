@@ -4,7 +4,7 @@
 
 ZATCA (Fatoora) Phase 2 e-invoicing for Laravel, built around the part that breaks under load: the invoice chain.
 
-> **Status: in development.** The invoice chain is done. Signed XML and QR codes, onboarding, and reporting and clearance follow. Not for production use before 1.0.
+> **Status: in development.** The invoice chain and signed XML with QR codes are done. Onboarding, and reporting and clearance follow. Not for production use before 1.0.
 
 ## Why the chain matters
 
@@ -18,6 +18,35 @@ Every invoice an EGS unit issues carries the next counter (ICV) and the hash of 
 composer require arkhan0072-dev/laravel-zatca
 php artisan migrate
 ```
+
+### Issue an invoice
+
+```php
+use Arkhan\Zatca\Zatca;
+use Saleh7\Zatca\Helpers\Certificate;
+
+$certificate = new Certificate($binarySecurityToken, $privateKey, $secret); // from onboarding
+
+$invoice = app(Zatca::class)->issue('pos-1', [
+    'uuid' => (string) Str::uuid(),
+    'id' => 'INV-1001',
+    'issueDate' => '2026-11-26',
+    'issueTime' => '14:30:00',
+    'invoiceType' => ['invoice' => 'simplified', 'type' => 'invoice'],
+    'supplier' => [...],
+    'invoiceLines' => [...],
+    'taxTotal' => [...],
+    'legalMonetaryTotal' => [...],
+], $certificate);
+
+$invoice->counter;  // ICV in its unit's chain
+$invoice->xml;      // signed UBL 2.1 XML, ready for reporting or clearance
+$invoice->qr;       // base64 QR code to print on the invoice
+```
+
+The invoice data uses the array format of [saleh7/php-zatca-xml](https://github.com/Saleh7/php-zatca-xml), which builds the UBL XML, signs it and makes the QR code. This package adds the counter (ICV) and previous invoice hash (PIH) from the unit's chain, replacing any you pass, and stores the result.
+
+### The chain on its own
 
 ```php
 use Arkhan\Zatca\Chain;
@@ -41,7 +70,7 @@ $invoice->previous_hash;  // the hash of the unit's previous invoice
 
 ## Supported
 
-PHP 8.3 and 8.4, Laravel 12 and 13, MySQL, PostgreSQL and SQLite. Every combination is tested in CI with 100% line coverage, PHPStan at max level and Pint.
+PHP 8.3 and 8.4 (with `ext-dom`, `ext-openssl`, `ext-mbstring`), Guzzle 7 (required by saleh7/php-zatca-xml), Laravel 12 and 13, MySQL, PostgreSQL and SQLite. Every combination is tested in CI with 100% line coverage, PHPStan at max level and Pint.
 
 ## Testing
 

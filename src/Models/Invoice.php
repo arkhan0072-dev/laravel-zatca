@@ -12,12 +12,13 @@ use Illuminate\Database\Eloquent\Model;
  * @property string $previous_hash previous invoice hash (PIH)
  * @property string $hash
  * @property string $xml
+ * @property string|null $qr base64 TLV QR code, printed on the invoice
  */
 class Invoice extends Model
 {
     protected $table = 'zatca_invoices';
 
-    protected $fillable = ['unit', 'counter', 'uuid', 'previous_hash', 'hash', 'xml'];
+    protected $fillable = ['unit', 'counter', 'uuid', 'previous_hash', 'hash', 'xml', 'qr'];
 
     protected $casts = ['counter' => 'integer'];
 }
