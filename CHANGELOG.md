@@ -6,6 +6,20 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-26
+
+### Added
+
+- `Zatca::creditNote()` and `debitNote()`: notes against an invoice, in its unit's chain, of its kind, referencing its number and carrying the reason ZATCA requires (KSA-10). Notes against a rejected invoice are refused.
+- `Invoice::number()`, `isStandard()` and `documentType()`, read from the signed XML.
+- `php artisan zatca:submit-pending`: sends every pending invoice, summarises the outcome, warns about simplified invoices older than 24 hours and certificates expiring within 30 days, and exits non-zero when anything is rejected or still pending.
+- Events `InvoiceReported`, `InvoiceCleared` and `InvoiceRejected` (with ZATCA's reasons), fired once after the result is saved.
+- `Onboarding::renew()` and `Unit::certificateExpiresAt()`: renew a production certificate with a new key pair before it expires.
+
+### Upgrading
+
+Run `php artisan migrate` (adds `details` to `zatca_units`). Units onboarded on 0.1 or 0.2 have no stored details: pass them to `renew()` the first time.
+
 ## [0.2.0] - 2026-11-26
 
 ### Added
@@ -34,6 +48,7 @@ First release. Every feature below passes ZATCA's developer sandbox end to end.
 - A README recipe, run as a test, for booking issued invoices in laravel-ledger.
 - An opt-in integration test (`ZATCA_SANDBOX=1`) that runs the whole flow against ZATCA's sandbox.
 
-[Unreleased]: https://github.com/arkhan0072-dev/laravel-zatca/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/arkhan0072-dev/laravel-zatca/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/arkhan0072-dev/laravel-zatca/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/arkhan0072-dev/laravel-zatca/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/arkhan0072-dev/laravel-zatca/releases/tag/v0.1.0
