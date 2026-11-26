@@ -25,6 +25,11 @@ return new class extends Migration
             $table->string('hash', 100);
             $table->longText('xml');
             $table->text('qr')->nullable(); // base64 TLV, printed on the invoice
+            $table->string('status', 16)->default('pending'); // pending, reported, cleared, rejected
+            $table->unsignedInteger('attempts')->default(0);
+            $table->timestamp('submitted_at')->nullable();
+            $table->json('zatca_response')->nullable();
+            $table->longText('cleared_xml')->nullable(); // ZATCA's stamped copy of a cleared invoice
             $table->timestamps();
             $table->unique(['unit', 'counter']);
         });

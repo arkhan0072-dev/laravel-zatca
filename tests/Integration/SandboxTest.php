@@ -3,7 +3,6 @@
 use Arkhan\Zatca\Onboarding;
 use Arkhan\Zatca\Tests\Fixtures\Invoices;
 use Arkhan\Zatca\Zatca;
-use Saleh7\Zatca\ZatcaAPI;
 
 // Runs the whole flow against ZATCA's real developer sandbox with its public test OTP and sample
 // taxpayer data. Opt-in, so CI never depends on ZATCA being up: ZATCA_SANDBOX=1 vendor/bin/pest tests/Integration
@@ -13,7 +12,7 @@ beforeEach(function () {
     }
 });
 
-it('onboards a unit and issues invoices that pass ZATCA\'s checks', function () {
+it('onboards a unit, then issues, reports and clears invoices', function () {
     $onboarding = app(Onboarding::class);
 
     $onboarding->start('sandbox-1', details(), '123345');
@@ -23,11 +22,13 @@ it('onboards a unit and issues invoices that pass ZATCA\'s checks', function () 
     $first = $zatca->issue('sandbox-1', Invoices::simplified());
     $second = $zatca->issue('sandbox-1', Invoices::standard());
 
-    $check = app(ZatcaAPI::class)->validateInvoiceCompliance($unit->compliance_certificate, $unit->compliance_secret, $second->xml, $second->hash, $second->uuid);
+    $reported = $zatca->submit($first)->fresh();
+    $cleared = $zatca->submit($second)->fresh();
 
     expect($unit->status)->toBe('active')
         ->and([$first->counter, $second->counter])->toBe([1, 2])
         ->and($second->previous_hash)->toBe($first->hash)
-        ->and($check->getValidationStatus())->toBeIn(['PASS', 'WARNING'])
-        ->and($check->getErrorMessages())->toBe([]);
+        ->and($reported->status)->toBe('reported')
+        ->and($cleared->status)->toBe('cleared')
+        ->and($cleared->cleared_xml)->toContain('<cbc:UUID>'.$second->uuid.'</cbc:UUID>');
 });

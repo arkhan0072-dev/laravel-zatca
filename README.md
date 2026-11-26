@@ -4,7 +4,7 @@
 
 ZATCA (Fatoora) Phase 2 e-invoicing for Laravel, built around the part that breaks under load: the invoice chain.
 
-> **Status: in development.** Onboarding, the invoice chain and signed XML with QR codes are done and pass ZATCA's sandbox. Reporting and clearance follow. Not for production use before 1.0.
+> **Status: in development.** Onboarding, the invoice chain, signed XML with QR codes, and exactly-once reporting and clearance are done and pass ZATCA's sandbox end to end. Not for production use before 1.0.
 
 ## Why the chain matters
 
@@ -68,6 +68,25 @@ $invoice->qr;       // base64 QR code to print on the invoice
 
 The invoice data uses the array format of [saleh7/php-zatca-xml](https://github.com/Saleh7/php-zatca-xml), which builds the UBL XML, signs it and makes the QR code. This package adds the counter (ICV) and previous invoice hash (PIH) from the unit's chain, replacing any you pass, and stores the result.
 
+### Send it to ZATCA, exactly once
+
+```php
+use Arkhan\Zatca\Jobs\SubmitInvoice;
+
+dispatch(new SubmitInvoice($invoice));   // queued, retried with backoff during ZATCA outages
+
+// or right away
+$invoice = app(Zatca::class)->submit($invoice);
+$invoice->status;          // reported (simplified), cleared (standard), rejected, or still pending
+$invoice->zatca_response;  // ZATCA's answer, with its warnings or the reasons for a rejection
+$invoice->cleared_xml;     // ZATCA's stamped copy of a cleared invoice: this is the one to give the buyer
+```
+
+- Simplified (B2C) invoices go to reporting and standard (B2B) invoices to clearance, read from the invoice's own type code.
+- The invoice row is locked while it is sent, so two workers never send it twice, and a reported or cleared invoice is never sent again. ZATCA's "already reported" (409) counts as reported.
+- A rejection (400) is stored with ZATCA's reasons and not retried: fix the data and issue a new invoice.
+- An outage (5xx, timeout, 401) leaves the invoice pending and throws `SubmissionException`, which the job retries. ZATCA expects simplified invoices within 24 hours.
+
 ### The chain on its own
 
 ```php
@@ -105,7 +124,7 @@ vendor/bin/pint --test
 
 Set `DB_CONNECTION=pgsql` or `DB_CONNECTION=mysql` and the usual `DB_*` variables to run the same tests against PostgreSQL or MySQL.
 
-`ZATCA_SANDBOX=1 vendor/bin/pest tests/Integration` runs the whole flow against ZATCA's real developer sandbox: onboarding, compliance checks, production certificate, and issued invoices checked by ZATCA.
+`ZATCA_SANDBOX=1 vendor/bin/pest tests/Integration` runs the whole flow against ZATCA's real developer sandbox: onboarding, compliance checks, production certificate, issuing, reporting and clearance.
 
 ## License
 
