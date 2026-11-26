@@ -4,45 +4,12 @@ use Arkhan\Zatca\Exceptions\OnboardingException;
 use Arkhan\Zatca\Models\Unit;
 use Arkhan\Zatca\Onboarding;
 use Arkhan\Zatca\Tests\Fixtures\TestCertificate;
-use Arkhan\Zatca\UnitDetails;
 use GuzzleHttp\Client;
 use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Middleware;
-use GuzzleHttp\Psr7\Response;
 use Illuminate\Support\Facades\DB;
 use Saleh7\Zatca\ZatcaAPI;
-
-/** Fake ZATCA: queue responses, record requests. */
-function fakeZatca(Response ...$responses): ArrayObject
-{
-    $sent = new ArrayObject;
-    $stack = HandlerStack::create(new MockHandler($responses));
-    $stack->push(Middleware::history($sent));
-    app()->instance(ZatcaAPI::class, new ZatcaAPI('sandbox', new Client(['handler' => $stack])));
-
-    return $sent;
-}
-
-function zatcaJson(int $status, array $body): Response
-{
-    return new Response($status, ['Content-Type' => 'application/json'], json_encode($body, JSON_THROW_ON_ERROR));
-}
-
-function details(): UnitDetails
-{
-    return new UnitDetails(
-        vatNumber: '399999999900003',
-        organizationName: 'Maximum Speed Tech Supply',
-        branchName: 'Riyadh Branch',
-        commonName: 'TST-886431145-399999999900003',
-        solutionName: 'TST',
-        model: 'TST',
-        serialNumber: 'ed22f1d8-e6a2-1118-9b58-d9a8f11e445f',
-        address: 'RRRD2929',
-        businessCategory: 'Supply activities',
-    );
-}
 
 beforeEach(function () {
     // ZATCA returns the certificate as base64 of the base64 DER.

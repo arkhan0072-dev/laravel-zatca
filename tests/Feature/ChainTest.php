@@ -8,14 +8,6 @@ use Arkhan\Zatca\SignedInvoice;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
-/** A stand-in for slice 2's signer: any XML, its real ZATCA-style hash (base64 of the raw SHA-256). */
-function signed(Link $link, ?string $uuid = null): SignedInvoice
-{
-    $xml = "<Invoice><ICV>{$link->counter}</ICV><PIH>{$link->previousHash}</PIH></Invoice>";
-
-    return new SignedInvoice($uuid ?? (string) Str::uuid(), base64_encode(hash('sha256', $xml, true)), $xml);
-}
-
 beforeEach(fn () => $this->chain = app(Chain::class));
 
 it('starts every unit at counter 1 with ZATCA\'s seed hash', function () {

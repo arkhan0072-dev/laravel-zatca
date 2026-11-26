@@ -11,6 +11,8 @@ final class TestCertificate
 {
     private static ?Certificate $certificate = null;
 
+    private static string $privateKey = '';
+
     public static function make(): Certificate
     {
         if (self::$certificate !== null) {
@@ -28,7 +30,16 @@ final class TestCertificate
         $x509 = new X509;
         $signed = $x509->sign($issuer, $subject, 'sha256');
         $der = $x509->saveX509($signed, X509::FORMAT_DER);
+        self::$privateKey = $key->toString('PKCS8');
 
-        return self::$certificate = new Certificate(base64_encode($der), $key->toString('PKCS8'), 'test-secret');
+        return self::$certificate = new Certificate(base64_encode($der), self::$privateKey, 'test-secret');
+    }
+
+    /** PEM private key matching make()'s certificate. */
+    public static function privateKey(): string
+    {
+        self::make();
+
+        return self::$privateKey;
     }
 }

@@ -2,7 +2,9 @@
 
 namespace Arkhan\Zatca;
 
+use Arkhan\Zatca\Exceptions\OnboardingException;
 use Arkhan\Zatca\Models\Invoice;
+use Arkhan\Zatca\Models\Unit;
 use InvalidArgumentException;
 use Saleh7\Zatca\Helpers\Certificate;
 
@@ -25,9 +27,25 @@ class Zatca
         return $environment;
     }
 
-    /** @param  array<string, mixed>  $invoice  data in the shape saleh7/php-zatca-xml's InvoiceMapper accepts */
-    public function issue(string $unit, array $invoice, Certificate $certificate): Invoice
+    /**
+     * Sign an invoice with the unit's production certificate (or $certificate) and add it to the unit's chain.
+     *
+     * @param  array<string, mixed>  $invoice  data in the shape saleh7/php-zatca-xml's InvoiceMapper accepts
+     */
+    public function issue(string $unit, array $invoice, ?Certificate $certificate = null): Invoice
     {
+        $certificate ??= $this->certificate($unit);
+
         return $this->chain->append($unit, fn (Link $link) => $this->signer->sign($invoice, $link, $certificate));
+    }
+
+    private function certificate(string $unit): Certificate
+    {
+        $model = Unit::where('unit', $unit)->where('status', 'active')->first();
+        if ($model === null || $model->certificate === null || $model->secret === null) {
+            throw new OnboardingException("Unit {$unit} has no production certificate yet; complete its onboarding first.");
+        }
+
+        return new Certificate($model->certificate, $model->private_key, $model->secret);
     }
 }

@@ -4,7 +4,7 @@
 
 ZATCA (Fatoora) Phase 2 e-invoicing for Laravel, built around the part that breaks under load: the invoice chain.
 
-> **Status: in development.** The invoice chain and signed XML with QR codes are done. Onboarding, and reporting and clearance follow. Not for production use before 1.0.
+> **Status: in development.** Onboarding, the invoice chain and signed XML with QR codes are done and pass ZATCA's sandbox. Reporting and clearance follow. Not for production use before 1.0.
 
 ## Why the chain matters
 
@@ -19,13 +19,35 @@ composer require arkhan0072-dev/laravel-zatca
 php artisan migrate
 ```
 
+### Onboard an EGS unit
+
+```php
+use Arkhan\Zatca\Onboarding;
+use Arkhan\Zatca\UnitDetails;
+
+$onboarding = app(Onboarding::class);
+
+// 1. Key pair, certificate request and compliance certificate. The OTP comes from the taxpayer's Fatoora portal.
+$onboarding->start('pos-1', new UnitDetails(
+    vatNumber: '399999999900003',
+    organizationName: 'Maximum Speed Tech Supply',
+    branchName: 'Riyadh Branch',
+    commonName: 'TST-886431145-399999999900003',
+    solutionName: 'TST', model: 'TST', serialNumber: 'ed22f1d8-e6a2-1118-9b58-d9a8f11e445f',
+    address: 'RRRD2929',
+    businessCategory: 'Supply activities',
+), $otp);
+
+// 2. ZATCA's compliance checks with sample documents, then the production certificate.
+$onboarding->complete('pos-1', [$standardInvoice, $simplifiedInvoice /* , credit and debit notes */]);
+```
+
+The unit's private key and secrets are stored encrypted with your `APP_KEY`, and the key is never written to disk. Set `zatca.environment` to `sandbox` (default), `simulation` or `production`. The sandbox accepts the OTP `123345`.
+
 ### Issue an invoice
 
 ```php
 use Arkhan\Zatca\Zatca;
-use Saleh7\Zatca\Helpers\Certificate;
-
-$certificate = new Certificate($binarySecurityToken, $privateKey, $secret); // from onboarding
 
 $invoice = app(Zatca::class)->issue('pos-1', [
     'uuid' => (string) Str::uuid(),
@@ -37,7 +59,7 @@ $invoice = app(Zatca::class)->issue('pos-1', [
     'invoiceLines' => [...],
     'taxTotal' => [...],
     'legalMonetaryTotal' => [...],
-], $certificate);
+]); // signed with the unit's production certificate
 
 $invoice->counter;  // ICV in its unit's chain
 $invoice->xml;      // signed UBL 2.1 XML, ready for reporting or clearance
@@ -82,6 +104,8 @@ vendor/bin/pint --test
 ```
 
 Set `DB_CONNECTION=pgsql` or `DB_CONNECTION=mysql` and the usual `DB_*` variables to run the same tests against PostgreSQL or MySQL.
+
+`ZATCA_SANDBOX=1 vendor/bin/pest tests/Integration` runs the whole flow against ZATCA's real developer sandbox: onboarding, compliance checks, production certificate, and issued invoices checked by ZATCA.
 
 ## License
 

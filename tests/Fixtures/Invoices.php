@@ -7,6 +7,24 @@ use Illuminate\Support\Str;
 /** Valid invoice data in the shape saleh7/php-zatca-xml's InvoiceMapper accepts. */
 final class Invoices
 {
+    /** @return array<string, mixed> a B2B invoice: like simplified(), with a buyer */
+    public static function standard(?string $uuid = null): array
+    {
+        return [
+            ...self::simplified($uuid),
+            'invoiceType' => ['invoice' => 'standard', 'type' => 'invoice'],
+            'delivery' => ['actualDeliveryDate' => '2026-11-26'],
+            'customer' => [
+                'registrationName' => 'Fatoora Samples',
+                'taxId' => '399999999800003',
+                'address' => [
+                    'street' => 'Salah Al-Din', 'buildingNumber' => '1111', 'subdivision' => 'Al-Murooj',
+                    'city' => 'Riyadh', 'postalZone' => '12222', 'country' => 'SA',
+                ],
+            ],
+        ];
+    }
+
     /** @return array<string, mixed> */
     public static function simplified(?string $uuid = null): array
     {

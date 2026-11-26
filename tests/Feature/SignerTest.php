@@ -8,34 +8,6 @@ use Arkhan\Zatca\Tests\Fixtures\Invoices;
 use Arkhan\Zatca\Tests\Fixtures\TestCertificate;
 use Arkhan\Zatca\Zatca;
 
-/** XPath over a signed invoice with UBL's namespaces registered. */
-function xpath(string $xml): DOMXPath
-{
-    $dom = new DOMDocument;
-    $dom->loadXML($xml);
-    $xpath = new DOMXPath($dom);
-    $xpath->registerNamespace('cbc', 'urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2');
-    $xpath->registerNamespace('cac', 'urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2');
-    $xpath->registerNamespace('ds', 'http://www.w3.org/2000/09/xmldsig#');
-
-    return $xpath;
-}
-
-/** @return array<int, string> ZATCA's QR code: base64 of tag-length-value fields. */
-function qrTags(string $qr): array
-{
-    $bytes = base64_decode($qr, true);
-    $tags = [];
-    for ($i = 0; $i < strlen($bytes);) {
-        $tag = ord($bytes[$i]);
-        $length = ord($bytes[$i + 1]);
-        $tags[$tag] = substr($bytes, $i + 2, $length);
-        $i += 2 + $length;
-    }
-
-    return $tags;
-}
-
 beforeEach(fn () => $this->link = new Link(7, Chain::FIRST_PREVIOUS_HASH));
 
 it('signs the invoice with its place in the chain', function () {
