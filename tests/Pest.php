@@ -2,6 +2,7 @@
 
 use Arkhan\Zatca\Link;
 use Arkhan\Zatca\SignedInvoice;
+use Arkhan\Zatca\Tests\ConcurrencyTestCase;
 use Arkhan\Zatca\Tests\TestCase;
 use Arkhan\Zatca\UnitDetails;
 use GuzzleHttp\Client;
@@ -13,6 +14,7 @@ use Illuminate\Support\Str;
 use Saleh7\Zatca\ZatcaAPI;
 
 uses(TestCase::class)->in('Feature', 'Unit', 'Integration');
+uses(ConcurrencyTestCase::class)->in('Concurrency');
 
 /** Fake ZATCA: queue responses, record requests. */
 function fakeZatca(Response ...$responses): ArrayObject

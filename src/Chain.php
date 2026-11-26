@@ -27,13 +27,9 @@ class Chain
      */
     public function append(string $unit, Closure $build): Invoice
     {
+        // Three attempts: a deadlock between two first invoices of a new unit is retried; nothing was stored yet.
         return DB::transaction(function () use ($unit, $build) {
-            // The primary key settles a race between two first invoices of a new unit.
-            DB::table('zatca_chains')->insertOrIgnore([
-                'unit' => $unit, 'counter' => 0, 'last_hash' => self::FIRST_PREVIOUS_HASH, 'created_at' => now(), 'updated_at' => now(),
-            ]);
-            /** @var object{counter: int|string, last_hash: string} $head */
-            $head = DB::table('zatca_chains')->where('unit', $unit)->lockForUpdate()->first();
+            $head = $this->lockedHead($unit);
 
             $link = new Link((int) $head->counter + 1, $head->last_hash);
             $signed = $build($link);
@@ -50,7 +46,11 @@ class Chain
                     'qr' => $signed->qr === '' ? null : $signed->qr,
                 ]);
             } catch (UniqueConstraintViolationException $e) {
-                throw new ChainException("Invoice UUID {$signed->uuid} was already used.", previous: $e);
+                // Two unique keys: the UUID, and the unit's counter. The driver's own message (not Laravel's,
+                // which repeats the SQL and so always mentions the uuid column) names the key that clashed.
+                throw new ChainException(str_contains((string) $e->getPrevious()?->getMessage(), 'uuid')
+                    ? "Invoice UUID {$signed->uuid} was already used."
+                    : "Counter {$link->counter} of unit {$unit} is already used; the chain head is out of step with the stored invoices.", previous: $e);
             }
 
             DB::table('zatca_chains')->where('unit', $unit)->update([
@@ -58,7 +58,30 @@ class Chain
             ]);
 
             return $invoice;
-        });
+        }, 3);
+    }
+
+    /**
+     * The unit's chain head, locked for this transaction. It is locked directly, and created only for a
+     * unit's first invoice: on MySQL an INSERT IGNORE on an existing row takes a shared lock, and two
+     * workers upgrading their shared locks to exclusive ones deadlock.
+     *
+     * @return object{counter: int|string, last_hash: string}
+     */
+    private function lockedHead(string $unit): object
+    {
+        $lock = fn () => DB::table('zatca_chains')->where('unit', $unit)->lockForUpdate()->first();
+        $head = $lock();
+        if ($head === null) {
+            // The primary key settles a race between two first invoices of a new unit.
+            DB::table('zatca_chains')->insertOrIgnore([
+                'unit' => $unit, 'counter' => 0, 'last_hash' => self::FIRST_PREVIOUS_HASH, 'created_at' => now(), 'updated_at' => now(),
+            ]);
+            $head = $lock();
+        }
+
+        /** @var object{counter: int|string, last_hash: string} $head */
+        return $head;
     }
 
     private function validate(SignedInvoice $signed): void

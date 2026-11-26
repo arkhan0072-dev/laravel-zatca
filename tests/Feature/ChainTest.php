@@ -81,3 +81,10 @@ it('locks the unit\'s chain while an invoice is added, so concurrent invoices qu
 
     expect(collect($queries)->contains(fn (string $sql) => str_contains($sql, 'zatca_chains') && str_contains($sql, 'for update')))->toBeTrue();
 });
+
+it('names a counter clash for what it is', function () {
+    $this->chain->append('pos-1', fn (Link $link) => signed($link));
+    DB::table('zatca_chains')->where('unit', 'pos-1')->update(['counter' => 0]); // head out of step, e.g. edited by hand
+
+    $this->chain->append('pos-1', fn (Link $link) => signed($link));
+})->throws(ChainException::class, 'Counter 1 of unit pos-1 is already used; the chain head is out of step with the stored invoices.');
