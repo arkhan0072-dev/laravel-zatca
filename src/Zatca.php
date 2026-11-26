@@ -6,8 +6,11 @@ use Arkhan\Zatca\Exceptions\OnboardingException;
 use Arkhan\Zatca\Exceptions\SubmissionException;
 use Arkhan\Zatca\Models\Invoice;
 use Arkhan\Zatca\Models\Unit;
+use Arkhan\Zatca\Testing\ZatcaFake;
 use DOMDocument;
 use DOMXPath;
+use GuzzleHttp\Client;
+use GuzzleHttp\HandlerStack;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use Saleh7\Zatca\Api\ClearanceResponse;
@@ -22,6 +25,15 @@ class Zatca
         private readonly Chain $chain,
         private readonly Signer $signer,
     ) {}
+
+    /** Answer every ZATCA call offline from now on; returns the fake for rejections, outages and assertions. */
+    public static function fake(): ZatcaFake
+    {
+        $fake = new ZatcaFake;
+        app()->instance(ZatcaAPI::class, new ZatcaAPI(self::environment(), new Client(['handler' => HandlerStack::create($fake)])));
+
+        return $fake;
+    }
 
     /** The ZATCA environment from config('zatca.environment'): sandbox (default), simulation or production. */
     public static function environment(): string
