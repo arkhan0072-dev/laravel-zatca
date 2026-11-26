@@ -37,4 +37,10 @@ it('onboards a unit, then issues, reports and clears invoices', function () {
 
     expect($credit->status)->toBe('reported', json_encode($credit->zatca_response))
         ->and($debit->status)->toBe('cleared', json_encode($debit->zatca_response));
+
+    $renewed = $onboarding->renew('sandbox-1', '123345');
+    $afterRenewal = $zatca->submit($zatca->issue('sandbox-1', Invoices::simplified()))->fresh();
+
+    expect($renewed->private_key)->not->toBe($unit->private_key)
+        ->and($afterRenewal->status)->toBe('reported', json_encode($afterRenewal->zatca_response));
 });

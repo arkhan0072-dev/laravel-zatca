@@ -73,8 +73,61 @@ class Onboarding
         if (Unit::where('unit', $unit)->exists()) {
             throw new OnboardingException("Unit {$unit} is already onboarded.");
         }
-        $environment = Zatca::environment();
+        [$csr, $privateKey] = $this->certificateRequest($details);
 
+        try {
+            $result = $this->api->requestComplianceCertificate($csr, $otp);
+        } catch (ZatcaApiException $e) {
+            throw new OnboardingException('ZATCA refused the compliance certificate request '.$this->reason($e), previous: $e);
+        }
+
+        $attributes = [
+            'unit' => $unit,
+            'environment' => Zatca::environment(),
+            'status' => 'compliance',
+            'private_key' => $privateKey,
+            'compliance_certificate' => $result->getCertificate(),
+            'compliance_secret' => $result->getSecret(),
+            'compliance_request_id' => (string) $result->getRequestId(),
+            'details' => $details->toArray(),
+        ];
+
+        try {
+            // Its own transaction: inside the caller's, a savepoint keeps PostgreSQL's transaction usable after a clash.
+            return DB::transaction(fn () => Unit::create($attributes));
+        } catch (UniqueConstraintViolationException $e) {
+            throw new OnboardingException("Unit {$unit} is already onboarded.", previous: $e);
+        }
+    }
+
+    /**
+     * Renew the unit's production certificate before it expires: a new key pair and certificate request
+     * with the unit's stored details (or $details), exchanged with the taxpayer's new OTP.
+     */
+    public function renew(string $unit, string $otp, ?UnitDetails $details = null): Unit
+    {
+        $model = Unit::where('unit', $unit)->where('status', 'active')->first();
+        if ($model === null || $model->certificate === null || $model->secret === null) {
+            throw new OnboardingException("Unit {$unit} has no production certificate to renew; complete its onboarding first.");
+        }
+        $details ??= $model->details === null
+            ? throw new OnboardingException("Unit {$unit} has no stored details; pass them to renew().")
+            : UnitDetails::fromArray($model->details);
+        [$csr, $privateKey] = $this->certificateRequest($details);
+
+        try {
+            $result = $this->api->renewProductionCertificate($model->certificate, $model->secret, $csr, $otp);
+        } catch (ZatcaApiException $e) {
+            throw new OnboardingException('ZATCA refused the certificate renewal '.$this->reason($e), previous: $e);
+        }
+        $model->update(['private_key' => $privateKey, 'certificate' => $result->getCertificate(), 'secret' => $result->getSecret(), 'details' => $details->toArray()]);
+
+        return $model;
+    }
+
+    /** @return array{string, string} the certificate request (PEM) and its new private key (PEM) */
+    private function certificateRequest(UnitDetails $details): array
+    {
         $builder = (new CertificateBuilder)
             ->setOrganizationIdentifier($details->vatNumber)
             ->setSerialNumber($details->solutionName, $details->model, $details->serialNumber)
@@ -84,32 +137,11 @@ class Onboarding
             ->setOrganizationalUnitName($details->branchName)
             ->setAddress($details->address)
             ->setInvoiceType($details->invoiceTypes)
-            ->setEnvironment(self::CSR_ENVIRONMENT[$environment])
+            ->setEnvironment(self::CSR_ENVIRONMENT[Zatca::environment()])
             ->setBusinessCategory($details->businessCategory);
         $builder->generate();
 
-        try {
-            $result = $this->api->requestComplianceCertificate($builder->getCsr(), $otp);
-        } catch (ZatcaApiException $e) {
-            throw new OnboardingException('ZATCA refused the compliance certificate request '.$this->reason($e), previous: $e);
-        }
-
-        $attributes = [
-            'unit' => $unit,
-            'environment' => $environment,
-            'status' => 'compliance',
-            'private_key' => $this->privateKey($builder),
-            'compliance_certificate' => $result->getCertificate(),
-            'compliance_secret' => $result->getSecret(),
-            'compliance_request_id' => (string) $result->getRequestId(),
-        ];
-
-        try {
-            // Its own transaction: inside the caller's, a savepoint keeps PostgreSQL's transaction usable after a clash.
-            return DB::transaction(fn () => Unit::create($attributes));
-        } catch (UniqueConstraintViolationException $e) {
-            throw new OnboardingException("Unit {$unit} is already onboarded.", previous: $e);
-        }
+        return [$builder->getCsr(), $this->privateKey($builder)];
     }
 
     /**

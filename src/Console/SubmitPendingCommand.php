@@ -4,6 +4,7 @@ namespace Arkhan\Zatca\Console;
 
 use Arkhan\Zatca\Exceptions\SubmissionException;
 use Arkhan\Zatca\Models\Invoice;
+use Arkhan\Zatca\Models\Unit;
 use Arkhan\Zatca\Zatca;
 use Illuminate\Console\Command;
 
@@ -16,6 +17,14 @@ class SubmitPendingCommand extends Command
 
     public function handle(Zatca $zatca): int
     {
+        // An expired certificate stops all invoicing, so warn while there is time to renew.
+        foreach (Unit::where('status', 'active')->get() as $unit) {
+            $expires = $unit->certificateExpiresAt();
+            if ($expires !== null && $expires->lte(now()->addDays(30))) {
+                $this->warn("The certificate of unit {$unit->unit} expires on {$expires->toDateString()}; renew it with Onboarding::renew().");
+            }
+        }
+
         // Oldest first within each unit, the order they were issued in.
         $pending = Invoice::where('status', 'pending')->orderBy('unit')->orderBy('counter')->get();
         if ($pending->isEmpty()) {

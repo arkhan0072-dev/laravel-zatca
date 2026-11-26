@@ -87,6 +87,15 @@ $invoice->cleared_xml;     // ZATCA's stamped copy of a cleared invoice: this is
 - A rejection (400) is stored with ZATCA's reasons and not retried: fix the data and issue a new invoice.
 - An outage (5xx, timeout, 401) leaves the invoice pending and throws `SubmissionException`, which the job retries. ZATCA expects simplified invoices within 24 hours.
 
+### Renew a certificate before it expires
+
+```php
+$unit->certificateExpiresAt();                 // read from the certificate itself
+app(Onboarding::class)->renew('pos-1', $otp);  // new key, new certificate request, same details
+```
+
+`zatca:submit-pending` warns when a unit's certificate expires within 30 days. Renewal reuses the details stored at onboarding; units onboarded before 0.3 pass them: `renew('pos-1', $otp, $details)`.
+
 ### Credit and debit notes
 
 ```php
