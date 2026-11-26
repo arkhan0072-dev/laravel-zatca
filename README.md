@@ -87,6 +87,31 @@ $invoice->cleared_xml;     // ZATCA's stamped copy of a cleared invoice: this is
 - A rejection (400) is stored with ZATCA's reasons and not retried: fix the data and issue a new invoice.
 - An outage (5xx, timeout, 401) leaves the invoice pending and throws `SubmissionException`, which the job retries. ZATCA expects simplified invoices within 24 hours.
 
+### Book invoices in laravel-ledger
+
+ZATCA needs the legal invoice; your books need the money. [laravel-ledger](https://github.com/arkhan0072-dev/laravel-ledger) is a double-entry ledger from the same author, and the two fit together: book each issued invoice once, linked to it.
+
+```php
+use Arkhan\Ledger\Ledger;
+use Arkhan\Ledger\Line;
+
+$invoice = app(Zatca::class)->issue('pos-1', $data);
+
+$halalas = fn (float $sar) => (int) round($sar * 100);
+
+app(Ledger::class)->post("ZATCA invoice {$data['id']}", [
+    Line::debit($cash, $halalas($data['legalMonetaryTotal']['taxInclusiveAmount'])),  // 231.15 SAR received
+    Line::credit($sales, $halalas($data['legalMonetaryTotal']['taxExclusiveAmount'])), // 201.00 SAR earned
+    Line::credit($vatPayable, $halalas($data['taxTotal']['taxAmount'])),               // 30.15 SAR owed to ZATCA
+], idempotencyKey: "zatca:{$invoice->uuid}", reference: $invoice);
+```
+
+- The invoice UUID as idempotency key books each invoice exactly once, even when a job retries.
+- `reference` links the ledger entry to the ZATCA invoice: `JournalEntry::whereMorphedTo('reference', $invoice)`.
+- The ledger then gives you the VAT you owe (`$vatPayable->balance()`), profit and loss, a balance sheet and period closing, with balances that the database refuses to let anyone rewrite.
+
+This recipe runs as a test in `tests/Feature/LedgerRecipeTest.php`.
+
 ### The chain on its own
 
 ```php

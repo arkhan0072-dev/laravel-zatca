@@ -2,6 +2,7 @@
 
 namespace Arkhan\Zatca\Tests;
 
+use Arkhan\Ledger\LedgerServiceProvider;
 use Arkhan\Zatca\ZatcaServiceProvider;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Orchestra\Testbench\TestCase as Orchestra;
@@ -12,7 +13,8 @@ abstract class TestCase extends Orchestra
 
     protected function getPackageProviders($app): array
     {
-        return [ZatcaServiceProvider::class];
+        // laravel-ledger is loaded for the README recipe that books invoices in it.
+        return [ZatcaServiceProvider::class, LedgerServiceProvider::class];
     }
 
     protected function defineEnvironment($app): void
