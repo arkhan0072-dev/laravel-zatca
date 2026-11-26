@@ -6,6 +6,20 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-26
+
+The API is now stable: breaking changes wait for 2.0. See UPGRADE.md.
+
+### Added
+
+- A publishable config file (`php artisan vendor:publish --tag=zatca-config`); the environment comes from `ZATCA_ENVIRONMENT`.
+- A concurrency test that runs four PHP processes appending to one unit's chain at once on PostgreSQL and MySQL, and checks for one unbroken chain.
+
+### Fixed
+
+- Concurrent invoicing on MySQL could deadlock. A unit's chain head is now created before the locking transaction and only locked inside it, and a deadlock is retried, which is safe because nothing has been stored yet.
+- A clash on a unit's counter was reported as a reused invoice UUID; the error now names the key that clashed.
+
 ## [0.3.0] - 2026-11-26
 
 ### Added
@@ -48,7 +62,8 @@ First release. Every feature below passes ZATCA's developer sandbox end to end.
 - A README recipe, run as a test, for booking issued invoices in laravel-ledger.
 - An opt-in integration test (`ZATCA_SANDBOX=1`) that runs the whole flow against ZATCA's sandbox.
 
-[Unreleased]: https://github.com/arkhan0072-dev/laravel-zatca/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/arkhan0072-dev/laravel-zatca/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/arkhan0072-dev/laravel-zatca/compare/v0.3.0...v1.0.0
 [0.3.0]: https://github.com/arkhan0072-dev/laravel-zatca/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/arkhan0072-dev/laravel-zatca/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/arkhan0072-dev/laravel-zatca/releases/tag/v0.1.0

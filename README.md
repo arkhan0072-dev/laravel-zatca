@@ -4,7 +4,7 @@
 
 ZATCA (Fatoora) Phase 2 e-invoicing for Laravel, built around the part that breaks under load: the invoice chain.
 
-> **Status: in development.** Onboarding, the invoice chain, signed XML with QR codes, exactly-once reporting and clearance, and test fakes are done and pass ZATCA's sandbox end to end. Not for production use before 1.0.
+> **Status: 1.0, stable API.** Onboarding, the invoice chain, signed invoices and notes, exactly-once reporting and clearance, certificate renewal and test fakes pass ZATCA's developer sandbox end to end, and the chain holds under concurrent processes on PostgreSQL and MySQL. Breaking changes wait for 2.0. Before going live, onboard your unit in ZATCA's simulation environment (`ZATCA_ENVIRONMENT=simulation`) and send a few real invoices there: the sandbox does not run every check that production does.
 
 ## Why the chain matters
 
@@ -42,7 +42,7 @@ $onboarding->start('pos-1', new UnitDetails(
 $onboarding->complete('pos-1', [$standardInvoice, $simplifiedInvoice /* , credit and debit notes */]);
 ```
 
-The unit's private key and secrets are stored encrypted with your `APP_KEY`, and the key is never written to disk. Set `zatca.environment` to `sandbox` (default), `simulation` or `production`. The sandbox accepts the OTP `123345`.
+The unit's private key and secrets are stored encrypted with your `APP_KEY`, and the key is never written to disk. Set `ZATCA_ENVIRONMENT` in `.env` to `sandbox` (default), `simulation` or `production`; `php artisan vendor:publish --tag=zatca-config` copies the config file if you want it in your app. The sandbox accepts the OTP `123345`.
 
 ### Issue an invoice
 
