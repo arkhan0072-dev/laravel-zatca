@@ -6,6 +6,21 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-26
+
+### Added
+
+- `Zatca::fake()` for testing apps without ZATCA: it issues self-signed certificates, passes compliance checks, and reports or clears invoices. `rejectNext()` and `outage()` drive the unhappy paths; `assertReported()`, `assertCleared()`, `assertSubmittedCount()` and `assertNothingSubmitted()` check what was sent.
+- `composer.json` suggests laravel-ledger for booking invoices.
+
+### Changed
+
+- laravel-ledger stays optional, and that is now tested: an architecture test fails if the package's code uses it, and CI runs the full suite without it.
+
+### Upgrading
+
+No changes needed.
+
 ## [0.1.0] - 2026-11-26
 
 First release. Every feature below passes ZATCA's developer sandbox end to end.
@@ -19,5 +34,6 @@ First release. Every feature below passes ZATCA's developer sandbox end to end.
 - A README recipe, run as a test, for booking issued invoices in laravel-ledger.
 - An opt-in integration test (`ZATCA_SANDBOX=1`) that runs the whole flow against ZATCA's sandbox.
 
-[Unreleased]: https://github.com/arkhan0072-dev/laravel-zatca/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/arkhan0072-dev/laravel-zatca/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/arkhan0072-dev/laravel-zatca/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/arkhan0072-dev/laravel-zatca/releases/tag/v0.1.0
