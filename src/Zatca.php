@@ -7,8 +7,6 @@ use Arkhan\Zatca\Exceptions\SubmissionException;
 use Arkhan\Zatca\Models\Invoice;
 use Arkhan\Zatca\Models\Unit;
 use Arkhan\Zatca\Testing\ZatcaFake;
-use DOMDocument;
-use DOMXPath;
 use GuzzleHttp\Client;
 use GuzzleHttp\HandlerStack;
 use Illuminate\Support\Facades\DB;
@@ -59,6 +57,45 @@ class Zatca
     }
 
     /**
+     * A credit note against $original (a refund or price reduction), in the same unit's chain, of the same
+     * kind (standard or simplified) and referencing the original's invoice number.
+     *
+     * @param  array<string, mixed>  $note  the note's own data: its number, lines and totals
+     */
+    public function creditNote(Invoice $original, array $note, string $reason): Invoice
+    {
+        return $this->note('credit', $original, $note, $reason);
+    }
+
+    /**
+     * A debit note against $original (an extra charge), like creditNote().
+     *
+     * @param  array<string, mixed>  $note
+     */
+    public function debitNote(Invoice $original, array $note, string $reason): Invoice
+    {
+        return $this->note('debit', $original, $note, $reason);
+    }
+
+    /** @param  array<string, mixed>  $note */
+    private function note(string $type, Invoice $original, array $note, string $reason): Invoice
+    {
+        if (trim($reason) === '') {
+            throw new InvalidArgumentException('A credit or debit note needs a reason (ZATCA rule KSA-10).');
+        }
+        if ($original->status === 'rejected') {
+            throw new InvalidArgumentException("Invoice {$original->uuid} was rejected by ZATCA; correct it with a new invoice, not a note.");
+        }
+
+        $paymentMeans = is_array($note['paymentMeans'] ?? null) ? $note['paymentMeans'] : ['code' => '10'];
+        $note['invoiceType'] = ['invoice' => $original->isStandard() ? 'standard' : 'simplified', 'type' => $type];
+        $note['billingReferences'] = [['id' => $original->number()]];
+        $note['paymentMeans'] = [...$paymentMeans, 'note' => $reason]; // ZATCA reads the reason from the instruction note
+
+        return $this->issue($original->unit, $note);
+    }
+
+    /**
      * Send an invoice to ZATCA exactly once: reporting for simplified (B2C) invoices, clearance for
      * standard (B2B) ones. A rejection is stored with ZATCA's reasons and not sent again; an outage
      * leaves the invoice pending and throws SubmissionException so a retry can send it later.
@@ -73,7 +110,7 @@ class Zatca
                 return $locked;
             }
             $certificate = $this->certificate($locked->unit);
-            $standard = $this->isStandard($locked->xml);
+            $standard = $locked->isStandard();
             $locked->attempts++;
             $locked->submitted_at = now();
 
@@ -105,19 +142,6 @@ class Zatca
         }
 
         return $saved;
-    }
-
-    /** Standard (B2B) invoices have an InvoiceTypeCode name starting "01", simplified ones "02". */
-    private function isStandard(string $xml): bool
-    {
-        $dom = new DOMDocument;
-        $dom->loadXML($xml);
-        $xpath = new DOMXPath($dom);
-        $xpath->registerNamespace('cbc', 'urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2');
-
-        $name = $xpath->evaluate('string(//cbc:InvoiceTypeCode/@name)');
-
-        return is_string($name) && str_starts_with($name, '01');
     }
 
     private function certificate(string $unit): Certificate

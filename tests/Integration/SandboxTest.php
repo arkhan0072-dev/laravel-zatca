@@ -31,4 +31,10 @@ it('onboards a unit, then issues, reports and clears invoices', function () {
         ->and($reported->status)->toBe('reported')
         ->and($cleared->status)->toBe('cleared')
         ->and($cleared->cleared_xml)->toContain('<cbc:UUID>'.$second->uuid.'</cbc:UUID>');
+
+    $credit = $zatca->submit($zatca->creditNote($reported, [...Invoices::simplified(), 'id' => 'CN-1'], 'Customer returned the pen'))->fresh();
+    $debit = $zatca->submit($zatca->debitNote($cleared, [...Invoices::standard(), 'id' => 'DN-1'], 'Delivery charge was not invoiced'))->fresh();
+
+    expect($credit->status)->toBe('reported', json_encode($credit->zatca_response))
+        ->and($debit->status)->toBe('cleared', json_encode($debit->zatca_response));
 });

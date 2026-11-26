@@ -2,6 +2,8 @@
 
 namespace Arkhan\Zatca\Models;
 
+use DOMDocument;
+use DOMXPath;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 
@@ -29,4 +31,37 @@ class Invoice extends Model
     protected $attributes = ['status' => 'pending', 'attempts' => 0];
 
     protected $casts = ['counter' => 'integer', 'attempts' => 'integer', 'submitted_at' => 'datetime', 'zatca_response' => 'array'];
+
+    /** The invoice number (cbc:ID) the seller gave it. */
+    public function number(): string
+    {
+        return $this->read('string(/*/cbc:ID)');
+    }
+
+    /** Standard (B2B) documents have an InvoiceTypeCode name starting "01", simplified (B2C) ones "02". */
+    public function isStandard(): bool
+    {
+        return str_starts_with($this->read('string(//cbc:InvoiceTypeCode/@name)'), '01');
+    }
+
+    /** invoice (388), credit (381) or debit (383). */
+    public function documentType(): string
+    {
+        return match ($this->read('string(//cbc:InvoiceTypeCode)')) {
+            '381' => 'credit',
+            '383' => 'debit',
+            default => 'invoice',
+        };
+    }
+
+    private function read(string $expression): string
+    {
+        $dom = new DOMDocument;
+        $dom->loadXML($this->xml);
+        $xpath = new DOMXPath($dom);
+        $xpath->registerNamespace('cbc', 'urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2');
+        $value = $xpath->evaluate($expression);
+
+        return is_string($value) ? $value : '';
+    }
 }
