@@ -27,7 +27,13 @@ class Chain
      */
     public function append(string $unit, Closure $build): Invoice
     {
-        // Three attempts: a deadlock between two first invoices of a new unit is retried; nothing was stored yet.
+        // Create a new unit's head before locking, in its own statement: locking a row that does not exist yet
+        // takes gap locks on MySQL, and concurrent first invoices inserting into the same gap deadlock.
+        if (! DB::table('zatca_chains')->where('unit', $unit)->exists()) {
+            $this->createHead($unit);
+        }
+
+        // Three attempts: a deadlock that still happens (say, inside a caller's transaction) is retried; nothing was stored yet.
         return DB::transaction(function () use ($unit, $build) {
             $head = $this->lockedHead($unit);
 
@@ -62,26 +68,27 @@ class Chain
     }
 
     /**
-     * The unit's chain head, locked for this transaction. It is locked directly, and created only for a
-     * unit's first invoice: on MySQL an INSERT IGNORE on an existing row takes a shared lock, and two
-     * workers upgrading their shared locks to exclusive ones deadlock.
+     * The unit's chain head, locked for this transaction. Only a row lock is taken: no INSERT IGNORE here,
+     * since on MySQL it takes a shared lock on the existing row, and two workers upgrading their shared
+     * locks to exclusive ones deadlock.
      *
      * @return object{counter: int|string, last_hash: string}
      */
     private function lockedHead(string $unit): object
     {
-        $lock = fn () => DB::table('zatca_chains')->where('unit', $unit)->lockForUpdate()->first();
-        $head = $lock();
-        if ($head === null) {
-            // The primary key settles a race between two first invoices of a new unit.
-            DB::table('zatca_chains')->insertOrIgnore([
-                'unit' => $unit, 'counter' => 0, 'last_hash' => self::FIRST_PREVIOUS_HASH, 'created_at' => now(), 'updated_at' => now(),
-            ]);
-            $head = $lock();
-        }
-
+        // append() created the head first, in this connection, so it is only missing if someone deleted it.
         /** @var object{counter: int|string, last_hash: string} $head */
+        $head = DB::table('zatca_chains')->where('unit', $unit)->lockForUpdate()->first() ?? throw new ChainException("The chain head of unit {$unit} was deleted while an invoice was being added.");
+
         return $head;
+    }
+
+    private function createHead(string $unit): void
+    {
+        // The primary key settles a race between two first invoices of a new unit.
+        DB::table('zatca_chains')->insertOrIgnore([
+            'unit' => $unit, 'counter' => 0, 'last_hash' => self::FIRST_PREVIOUS_HASH, 'created_at' => now(), 'updated_at' => now(),
+        ]);
     }
 
     private function validate(SignedInvoice $signed): void
