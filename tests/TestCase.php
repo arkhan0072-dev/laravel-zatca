@@ -13,8 +13,10 @@ abstract class TestCase extends Orchestra
 
     protected function getPackageProviders($app): array
     {
-        // laravel-ledger is loaded for the README recipe that books invoices in it.
-        return [ZatcaServiceProvider::class, LedgerServiceProvider::class];
+        // laravel-ledger is optional: loaded for the recipe that books invoices in it, when installed.
+        return class_exists(LedgerServiceProvider::class)
+            ? [ZatcaServiceProvider::class, LedgerServiceProvider::class]
+            : [ZatcaServiceProvider::class];
     }
 
     protected function defineEnvironment($app): void

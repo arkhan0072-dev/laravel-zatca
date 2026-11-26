@@ -4,7 +4,7 @@
 
 ZATCA (Fatoora) Phase 2 e-invoicing for Laravel, built around the part that breaks under load: the invoice chain.
 
-> **Status: in development.** Onboarding, the invoice chain, signed XML with QR codes, and exactly-once reporting and clearance are done and pass ZATCA's sandbox end to end. Not for production use before 1.0.
+> **Status: in development.** Onboarding, the invoice chain, signed XML with QR codes, exactly-once reporting and clearance, and test fakes are done and pass ZATCA's sandbox end to end. Not for production use before 1.0.
 
 ## Why the chain matters
 
@@ -87,9 +87,29 @@ $invoice->cleared_xml;     // ZATCA's stamped copy of a cleared invoice: this is
 - A rejection (400) is stored with ZATCA's reasons and not retried: fix the data and issue a new invoice.
 - An outage (5xx, timeout, 401) leaves the invoice pending and throws `SubmissionException`, which the job retries. ZATCA expects simplified invoices within 24 hours.
 
+### Test your app without ZATCA
+
+```php
+use Arkhan\Zatca\Zatca;
+
+$fake = Zatca::fake();   // every ZATCA call is answered offline from here on
+
+// ... onboard, issue and submit through your own code ...
+
+$fake->assertReported($invoice);
+$fake->assertCleared($b2bInvoice);
+$fake->assertSubmittedCount(2);
+$fake->assertNothingSubmitted();
+
+$fake->rejectNext('BR-KSA-37', 'The seller address building number must contain 4 digits.');  // next submission is rejected
+$fake->outage();          // ZATCA answers 503 until $fake->outage(false)
+```
+
+The fake issues self-signed certificates, passes compliance checks, and reports or clears invoices, so your onboarding and invoicing code runs unchanged in tests.
+
 ### Book invoices in laravel-ledger
 
-ZATCA needs the legal invoice; your books need the money. [laravel-ledger](https://github.com/arkhan0072-dev/laravel-ledger) is a double-entry ledger from the same author, and the two fit together: book each issued invoice once, linked to it.
+laravel-zatca works on its own; laravel-ledger is optional. ZATCA needs the legal invoice; your books need the money. [laravel-ledger](https://github.com/arkhan0072-dev/laravel-ledger) is a double-entry ledger from the same author, and the two fit together: book each issued invoice once, linked to it.
 
 ```php
 use Arkhan\Ledger\Ledger;

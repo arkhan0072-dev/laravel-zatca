@@ -25,6 +25,25 @@ jobs:
       - name: PHPStan (max level)
         run: vendor/bin/phpstan analyse --no-progress
 
+  # laravel-ledger is optional: prove the package installs and passes without it.
+  standalone:
+    runs-on: ubuntu-latest
+    name: Without laravel-ledger
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          coverage: pcov
+
+      - run: composer remove --dev arkhan0072-dev/laravel-ledger --no-update --no-interaction
+
+      - run: composer update --prefer-dist --no-interaction --no-progress
+
+      - name: Tests (fails below 100% coverage)
+        run: vendor/bin/pest --coverage --min=100
+
   test:
     runs-on: ubuntu-latest
 

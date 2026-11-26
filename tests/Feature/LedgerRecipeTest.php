@@ -14,6 +14,9 @@ use Arkhan\Zatca\Tests\Fixtures\TestCertificate;
 use Arkhan\Zatca\Zatca;
 
 beforeEach(function () {
+    if (! class_exists(Ledger::class)) {
+        $this->markTestSkipped('laravel-ledger is not installed; laravel-zatca works without it.');
+    }
     Unit::create([
         'unit' => 'pos-1', 'environment' => 'sandbox', 'status' => 'active',
         'private_key' => TestCertificate::privateKey(),
