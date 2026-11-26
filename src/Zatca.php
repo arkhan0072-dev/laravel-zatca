@@ -2,6 +2,9 @@
 
 namespace Arkhan\Zatca;
 
+use Arkhan\Zatca\Events\InvoiceCleared;
+use Arkhan\Zatca\Events\InvoiceRejected;
+use Arkhan\Zatca\Events\InvoiceReported;
 use Arkhan\Zatca\Exceptions\OnboardingException;
 use Arkhan\Zatca\Exceptions\SubmissionException;
 use Arkhan\Zatca\Models\Invoice;
@@ -141,7 +144,27 @@ class Zatca
             throw new SubmissionException("ZATCA could not take invoice {$saved->uuid} (HTTP ".(is_int($status) ? $status : 'error').'); it stays pending for a retry.', previous: $outage);
         }
 
+        // Only this call's change is announced: a second submit of a done invoice returns before sending.
+        if ($saved->wasChanged('status')) {
+            event(match ($saved->status) {
+                'reported' => new InvoiceReported($saved),
+                'cleared' => new InvoiceCleared($saved),
+                default => new InvoiceRejected($saved, $this->reasons($saved)),
+            });
+        }
+
         return $saved;
+    }
+
+    /** @return list<string> ZATCA's error messages for a rejected invoice, as "CODE: message" */
+    private function reasons(Invoice $invoice): array
+    {
+        $errors = data_get($invoice->zatca_response, 'validationResults.errorMessages');
+
+        return array_values(array_map(
+            fn ($error) => trim((is_scalar($code = data_get($error, 'code')) ? (string) $code : '').': '.(is_scalar($message = data_get($error, 'message')) ? (string) $message : ''), ': '),
+            is_array($errors) ? $errors : [],
+        ));
     }
 
     private function certificate(string $unit): Certificate

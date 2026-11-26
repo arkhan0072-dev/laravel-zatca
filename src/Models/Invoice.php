@@ -21,6 +21,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $submitted_at
  * @property array<mixed>|null $zatca_response ZATCA's last answer, with its validation messages
  * @property string|null $cleared_xml ZATCA's stamped copy of a cleared invoice
+ * @property Carbon $created_at when it was issued
  */
 class Invoice extends Model
 {

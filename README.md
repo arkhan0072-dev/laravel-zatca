@@ -87,6 +87,36 @@ $invoice->cleared_xml;     // ZATCA's stamped copy of a cleared invoice: this is
 - A rejection (400) is stored with ZATCA's reasons and not retried: fix the data and issue a new invoice.
 - An outage (5xx, timeout, 401) leaves the invoice pending and throws `SubmissionException`, which the job retries. ZATCA expects simplified invoices within 24 hours.
 
+### Credit and debit notes
+
+```php
+$note = $zatca->creditNote($invoice, $noteData, 'Customer returned one item');   // refund or price reduction
+$note = $zatca->debitNote($invoice, $noteData, 'Delivery was not invoiced');     // extra charge
+dispatch(new SubmitInvoice($note));
+```
+
+A note goes into the same unit's chain as its invoice, takes the invoice's kind (so it is reported or cleared the same way), references the invoice's number, and carries the reason ZATCA requires. Notes against an invoice ZATCA rejected are refused: correct those with a new invoice.
+
+### Never miss the 24-hour window
+
+```php
+// routes/console.php
+Schedule::command('zatca:submit-pending')->everyFifteenMinutes();
+```
+
+The command sends every pending invoice, prints how many were reported, cleared, rejected or are still pending, warns about simplified invoices older than 24 hours (BR-KSA-98), and exits non-zero when anything is rejected or still pending, so your scheduler's failure alerts fire.
+
+Listen for the outcome of each invoice, fired once after it is saved:
+
+```php
+use Arkhan\Zatca\Events\InvoiceCleared;
+use Arkhan\Zatca\Events\InvoiceRejected;
+use Arkhan\Zatca\Events\InvoiceReported;
+
+Event::listen(InvoiceCleared::class, fn (InvoiceCleared $e) => Mail::to($buyer)->send(new ClearedInvoice($e->invoice->cleared_xml)));
+Event::listen(InvoiceRejected::class, fn (InvoiceRejected $e) => Log::error('ZATCA rejected '.$e->invoice->uuid, $e->reasons));
+```
+
 ### Test your app without ZATCA
 
 ```php
