@@ -6,6 +6,19 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Sandbox scenarios for a rejected invoice: the chain carries on from it, a corrected invoice is cleared, and a rejected simplified invoice is cancelled with a credit note.
+- README section on handling rejections, following ZATCA's Detailed Technical Guideline.
+
+### Changed
+
+- A credit or debit note can now cancel a rejected simplified invoice, which ZATCA allows. Notes against a rejected standard invoice are still refused.
+
+### Fixed
+
+- When ZATCA turns clearance off (HTTP 303), a standard invoice is now sent through reporting, as ZATCA instructs. Before, it stayed pending and was retried forever.
+
 ## [1.0.0] - 2026-11-26
 
 The API is now stable: breaking changes wait for 2.0. See UPGRADE.md.

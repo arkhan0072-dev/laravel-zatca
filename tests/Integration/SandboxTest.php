@@ -44,3 +44,22 @@ it('onboards a unit, then issues, reports and clears invoices', function () {
     expect($renewed->private_key)->not->toBe($unit->private_key)
         ->and($afterRenewal->status)->toBe('reported', json_encode($afterRenewal->zatca_response));
 });
+
+it('keeps the chain going after ZATCA rejects an invoice, as its guideline requires', function () {
+    $onboarding = app(Onboarding::class);
+    $onboarding->start('sandbox-2', details(), '123345');
+    $onboarding->complete('sandbox-2', [Invoices::standard(), Invoices::simplified()]);
+    $zatca = app(Zatca::class);
+    $wrongTotal = fn (array $data) => array_replace_recursive($data, ['legalMonetaryTotal' => ['taxInclusiveAmount' => 999.99, 'payableAmount' => 999.99]]);
+
+    $rejectedSale = $zatca->submit($zatca->issue('sandbox-2', [...$wrongTotal(Invoices::simplified()), 'id' => 'INV-9']))->fresh();
+    $rejectedB2b = $zatca->submit($zatca->issue('sandbox-2', $wrongTotal(Invoices::standard())))->fresh();
+    $corrected = $zatca->submit($zatca->issue('sandbox-2', Invoices::standard()))->fresh();
+    $cancelled = $zatca->submit($zatca->creditNote($rejectedSale, [...Invoices::simplified(), 'id' => 'CN-9'], 'Cancels INV-9, which ZATCA did not report'))->fresh();
+
+    expect([$rejectedSale->status, $rejectedB2b->status])->toBe(['rejected', 'rejected'])
+        ->and($rejectedB2b->zatca_response['validationResults']['errorMessages'][0]['code'])->toBe('BR-CO-15')
+        ->and($corrected->previous_hash)->toBe($rejectedB2b->hash)
+        ->and($corrected->status)->toBe('cleared', json_encode($corrected->zatca_response))
+        ->and($cancelled->status)->toBe('reported', json_encode($cancelled->zatca_response));
+});

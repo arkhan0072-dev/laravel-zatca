@@ -10,8 +10,8 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Each EGS unit's invoices form a chain: every invoice carries the next counter (ICV) and the
- * hash of the invoice before it (PIH). ZATCA rejects an invoice whose counter or previous hash is
- * wrong, so two invoices built at the same time must never get the same link.
+ * hash of the invoice before it (PIH), including rejected ones. ZATCA requires one gap-free sequence
+ * per unit, so two invoices built at the same time must never get the same link.
  */
 class Chain
 {

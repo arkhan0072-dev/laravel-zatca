@@ -86,8 +86,9 @@ class Zatca
         if (trim($reason) === '') {
             throw new InvalidArgumentException('A credit or debit note needs a reason (ZATCA rule KSA-10).');
         }
-        if ($original->status === 'rejected') {
-            throw new InvalidArgumentException("Invoice {$original->uuid} was rejected by ZATCA; correct it with a new invoice, not a note.");
+        // A rejected simplified invoice was already given to the buyer, so ZATCA lets a credit note cancel it.
+        if ($original->status === 'rejected' && $original->isStandard()) {
+            throw new InvalidArgumentException("Invoice {$original->uuid} was not cleared by ZATCA, so it is not a tax invoice; correct it with a new invoice, not a note.");
         }
 
         $paymentMeans = is_array($note['paymentMeans'] ?? null) ? $note['paymentMeans'] : ['code' => '10'];
@@ -117,10 +118,19 @@ class Zatca
             $locked->attempts++;
             $locked->submitted_at = now();
 
+            $api = app(ZatcaAPI::class);
+            $args = [$certificate->getRawCertificate(), (string) $certificate->getSecretKey(), $locked->xml, $locked->hash, $locked->uuid];
             try {
-                $response = $standard
-                    ? app(ZatcaAPI::class)->submitClearanceInvoice($certificate->getRawCertificate(), (string) $certificate->getSecretKey(), $locked->xml, $locked->hash, $locked->uuid)
-                    : app(ZatcaAPI::class)->submitReportingInvoice($certificate->getRawCertificate(), (string) $certificate->getSecretKey(), $locked->xml, $locked->hash, $locked->uuid);
+                try {
+                    $response = $standard ? $api->submitClearanceInvoice(...$args) : $api->submitReportingInvoice(...$args);
+                } catch (ZatcaApiException $e) {
+                    // 303: ZATCA has turned clearance off and takes standard invoices through reporting instead.
+                    if (! $standard || ($e->getContext()['statusCode'] ?? null) !== 303) {
+                        throw $e;
+                    }
+                    $standard = false;
+                    $response = $api->submitReportingInvoice(...$args);
+                }
                 $locked->zatca_response = $response->toArray();
                 $locked->status = $standard ? 'cleared' : 'reported';
                 $locked->cleared_xml = $response instanceof ClearanceResponse ? $response->getDecodedClearedInvoice() : null;

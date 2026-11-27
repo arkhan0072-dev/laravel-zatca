@@ -99,6 +99,31 @@ it('marks a rejected invoice and keeps ZATCA\'s reasons, without retrying', func
         ->and($sent)->toHaveCount(1);
 });
 
+it('links the next invoice to a rejected one and never reuses its counter (ZATCA guideline, pages 48 and 71)', function () {
+    fakeZatca(zatcaJson(400, ['validationResults' => validation('ERROR', [], [['code' => 'BR-CO-15', 'message' => 'Invoice total amount with VAT (BT-112)']]), 'reportingStatus' => 'NOT_REPORTED']));
+    $rejected = $this->zatca->submit($this->standard)->fresh();
+
+    $next = $this->zatca->issue('pos-1', Invoices::standard());
+
+    expect($rejected->status)->toBe('rejected')
+        ->and($next->counter)->toBe($rejected->counter + 1)
+        ->and($next->previous_hash)->toBe($rejected->hash);
+});
+
+it('reports a standard invoice when ZATCA has turned clearance off (HTTP 303)', function () {
+    $sent = fakeZatca(
+        zatcaJson(303, ['message' => 'Clearance is deactivated. Please use the /invoices/reporting/single endpoint instead.']),
+        zatcaJson(200, ['validationResults' => validation('PASS'), 'reportingStatus' => 'REPORTED']),
+    );
+
+    $invoice = $this->zatca->submit($this->standard)->fresh();
+
+    expect($sent)->toHaveCount(2)
+        ->and($sent[1]['request']->getUri()->getPath())->toEndWith('/invoices/reporting/single')
+        ->and($sent[1]['request']->getHeaderLine('Clearance-Status'))->toBe('0')
+        ->and($invoice)->status->toBe('reported')->cleared_xml->toBeNull()->attempts->toBe(1);
+});
+
 it('leaves the invoice pending for a retry when ZATCA is unavailable', function (Response $response) {
     fakeZatca($response);
 

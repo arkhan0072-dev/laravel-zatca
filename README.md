@@ -8,7 +8,9 @@ ZATCA (Fatoora) Phase 2 e-invoicing for Laravel, built around the part that brea
 
 ## Why the chain matters
 
-Every invoice an EGS unit issues carries the next counter (ICV) and the hash of the invoice before it (PIH). ZATCA rejects an invoice whose counter or previous hash is wrong, and every later invoice of that unit fails with it. Two invoices built at the same moment, by two web requests or two queue workers, must therefore never receive the same link.
+Every invoice an EGS unit issues carries the next counter (ICV) and the hash of the invoice before it (PIH). ZATCA requires one gap-free sequence per unit, and an ICV may never appear on two documents ([Detailed Technical Guideline](https://zatca.gov.sa/en/E-Invoicing/Introduction/Guidelines/Documents/E-invoicing-Detailed-Technical-Guideline.pdf), pages 48 and 72). Two invoices built at the same moment, by two web requests or two queue workers, must therefore never receive the same link.
+
+The sandbox will not catch a broken chain for you: in our tests it accepted a wrong previous hash and a counter jump without even a warning. A broken chain surfaces later, in production checks or an audit, when it is much harder to repair.
 
 `Chain::append()` locks the unit's chain head (`SELECT ... FOR UPDATE`), hands your code the next link, stores the signed invoice and moves the head, all in one transaction. A second invoice waits for the first and then gets the next link.
 
@@ -84,8 +86,27 @@ $invoice->cleared_xml;     // ZATCA's stamped copy of a cleared invoice: this is
 
 - Simplified (B2C) invoices go to reporting and standard (B2B) invoices to clearance, read from the invoice's own type code.
 - The invoice row is locked while it is sent, so two workers never send it twice, and a reported or cleared invoice is never sent again. ZATCA's "already reported" (409) counts as reported.
-- A rejection (400) is stored with ZATCA's reasons and not retried: fix the data and issue a new invoice.
+- A rejection (400) is stored with ZATCA's reasons and not retried. See [When ZATCA rejects an invoice](#when-zatca-rejects-an-invoice).
+- If ZATCA has turned clearance off (303), a standard invoice is sent through reporting instead, as ZATCA instructs; it is then `reported`, with no stamped copy.
 - An outage (5xx, timeout, 401) leaves the invoice pending and throws `SubmissionException`, which the job retries. ZATCA expects simplified invoices within 24 hours.
+
+### When ZATCA rejects an invoice
+
+This follows ZATCA's [Detailed Technical Guideline](https://zatca.gov.sa/en/E-Invoicing/Introduction/Guidelines/Documents/E-invoicing-Detailed-Technical-Guideline.pdf) (pages 48, 71, 72, 77 and 78), and the scenarios run against ZATCA's sandbox in `tests/Integration/SandboxTest.php`.
+
+- **The rejected invoice keeps its place in the chain.** ZATCA records the hash of rejected documents, so the next invoice links to the rejected one, and its counter and UUID are never reused. The package does this on its own: never edit or delete a rejected invoice.
+- **Never resend it.** Fix the data and issue a new invoice; it gets the next counter, a new UUID and a new hash.
+- **Standard (B2B):** a rejected invoice is not a tax invoice, so do not give it to the buyer and do not raise a note against it. Issue a corrected invoice, dated when you issue it.
+- **Simplified (B2C):** the buyer already has the invoice. Either issue a corrected invoice keeping the original transaction date, or cancel it with a credit note and issue a new one; ZATCA's guideline gives both answers.
+- **VAT is still due** on the sale, even while its invoice is rejected.
+- **If your system cannot issue invoices at all**, ZATCA requires you to [notify it](https://zatca.gov.sa/en/E-Invoicing/FailureNotifications/Pages/VerifyTaxpayer.aspx), then send everything once you are back.
+
+```php
+Event::listen(InvoiceRejected::class, function (InvoiceRejected $e) {
+    // $e->reasons, e.g. ['BR-CO-15: Invoice total amount with VAT (BT-112) ...']: fix the data, then
+    // app(Zatca::class)->issue($e->invoice->unit, $correctedData);
+});
+```
 
 ### Renew a certificate before it expires
 
@@ -104,7 +125,7 @@ $note = $zatca->debitNote($invoice, $noteData, 'Delivery was not invoiced');    
 dispatch(new SubmitInvoice($note));
 ```
 
-A note goes into the same unit's chain as its invoice, takes the invoice's kind (so it is reported or cleared the same way), references the invoice's number, and carries the reason ZATCA requires. Notes against an invoice ZATCA rejected are refused: correct those with a new invoice.
+A note goes into the same unit's chain as its invoice, takes the invoice's kind (so it is reported or cleared the same way), references the invoice's number, and carries the reason ZATCA requires. A note against a rejected standard invoice is refused, since it never became a tax invoice; a rejected simplified invoice can be cancelled with a credit note.
 
 ### Never miss the 24-hour window
 

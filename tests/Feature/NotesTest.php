@@ -70,12 +70,21 @@ it('needs a reason for every note', function () {
     $this->zatca->creditNote($original, Invoices::simplified(), '  ');
 })->throws(InvalidArgumentException::class, 'A credit or debit note needs a reason (ZATCA rule KSA-10).');
 
-it('refuses a note against an invoice ZATCA rejected', function () {
-    $original = $this->zatca->issue('pos-1', Invoices::simplified());
+it('refuses a note against a standard invoice ZATCA rejected, since it never became a tax invoice', function () {
+    $original = $this->zatca->issue('pos-1', Invoices::standard());
     $original->update(['status' => 'rejected']);
 
-    $this->zatca->creditNote($original, Invoices::simplified(), 'Refund');
-})->throws(InvalidArgumentException::class, 'was rejected by ZATCA; correct it with a new invoice, not a note.');
+    $this->zatca->creditNote($original, Invoices::standard(), 'Refund');
+})->throws(InvalidArgumentException::class, 'was not cleared by ZATCA, so it is not a tax invoice; correct it with a new invoice, not a note.');
+
+it('cancels a rejected simplified invoice with a credit note, as ZATCA allows (guideline, page 77)', function () {
+    $original = $this->zatca->issue('pos-1', [...Invoices::simplified(), 'id' => 'INV-7']);
+    $original->update(['status' => 'rejected']);
+
+    $note = $this->zatca->creditNote($original, [...Invoices::simplified(), 'id' => 'CN-7'], 'Cancels INV-7, which ZATCA did not report');
+
+    expect(xpath($note->xml)->evaluate('string(//cac:BillingReference//cbc:ID)'))->toBe('INV-7');
+});
 
 it('keeps the invoice\'s other payment details on a note', function () {
     $original = $this->zatca->issue('pos-1', Invoices::simplified());
