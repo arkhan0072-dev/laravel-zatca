@@ -6,6 +6,8 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-28
+
 ### Added
 
 - Sandbox scenarios for a rejected invoice: the chain carries on from it, a corrected invoice is cleared, and a rejected simplified invoice is cancelled with a credit note.
@@ -75,7 +77,8 @@ First release. Every feature below passes ZATCA's developer sandbox end to end.
 - A README recipe, run as a test, for booking issued invoices in laravel-ledger.
 - An opt-in integration test (`ZATCA_SANDBOX=1`) that runs the whole flow against ZATCA's sandbox.
 
-[Unreleased]: https://github.com/arkhan0072-dev/laravel-zatca/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/arkhan0072-dev/laravel-zatca/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/arkhan0072-dev/laravel-zatca/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/arkhan0072-dev/laravel-zatca/compare/v0.3.0...v1.0.0
 [0.3.0]: https://github.com/arkhan0072-dev/laravel-zatca/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/arkhan0072-dev/laravel-zatca/compare/v0.1.0...v0.2.0
